@@ -51,7 +51,7 @@ sub monitor {
         }
     };
 
-    $data{PKG} = [map {chomp; $_} `$cmds{PKG}`];
+    $data{PKG} = [map {chomp; $_} split "\n", `$cmds{PKG}`];
 
     return \%data;
 };
