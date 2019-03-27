@@ -7,9 +7,9 @@ use POSIX qw(strftime);
 use IO::Socket;
 
 
-our $data_start = tell DATA;
-our $json = JSON->new;
-our ($addr, $port);
+my $data_start = tell DATA;
+my $json = JSON->new;
+my ($addr, $port);
 if (@ARGV == 2) {
     $addr = $ARGV[0];    $port = $ARGV[1];
 } elsif (@ARGV == 1) {
