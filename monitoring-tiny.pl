@@ -2,7 +2,6 @@
 
 use v5.26;
 use warnings;
-use Monitoring::Tiny;
 use JSON;
 use POSIX qw(strftime);
 use IO::Socket;
@@ -16,10 +15,50 @@ if (@ARGV == 2) {
 } elsif (@ARGV == 1) {
     $addr = '127.0.0.1'; $port = $ARGV[0];
 } else {
-    say $json->encode(Monitoring::Tiny::monitor);
+    say $json->encode(&monitor);
     exit;
 };
 
+
+sub monitor {
+    my %cmds = (
+        CPU => '/usr/sbin/iostat -dC',
+        DSK => '/bin/df -m',
+    );
+    my %data = (timestamp => $^T);
+
+    my @lines = map {s/\s+//; $_} `$cmds{CPU}`;
+    my @D = split /\s+/, $lines[0]; pop @D;
+    my @F = split /\s+/, $lines[2];
+    my $i = 0;
+
+    for (@D) {
+        $data{IO}{$_} = {
+            kpt => $F[$i++],
+            tps => $F[$i++],
+            mps => $F[$i++],
+        };
+    };
+
+    $data{CPU} = {
+        user    => $F[-3],
+        system  => $F[-2],
+        idle    => $F[-1],
+    };
+
+    for (`$cmds{DSK}`) {
+        my @F = split /\s+/;
+        push @{$data{DISK}}, {
+            filesystem => $F[0],
+            size       => $F[1],
+            used       => $F[2],
+            available  => $F[3],
+            mount      => $F[-1],
+        } if $F[-1] =~ m(^/) && $F[1] =~ /\d+/ && $F[1] > 0;
+    };
+
+    return \%data;
+};
 
 sub request {
     my ($client) = @_;
@@ -46,7 +85,7 @@ sub request {
         } elsif ($req->{url} eq '/status') {
             $res->{status} = 200;                                           # OK
             $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = $json->encode(Monitoring::Tiny::monitor);
+            $res->{text} = $json->encode(&monitor);
         } else {
             $res->{status} = 404;                                    # Not Found
         }
