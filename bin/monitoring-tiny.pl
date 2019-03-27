@@ -8,6 +8,7 @@ use POSIX qw(strftime);
 use IO::Socket;
 
 
+our $data_start = tell DATA;
 our $json = JSON->new;
 our ($addr, $port);
 if (@ARGV == 2) {
@@ -40,6 +41,7 @@ sub request {
             local $/;
             $res->{status} = 200;                                           # OK
             $res->{headers}{'Content-type'} = 'text/html';
+            seek DATA, $data_start, 0;
             $res->{text} = <DATA>;
         } elsif ($req->{url} eq '/status') {
             $res->{status} = 200;                                           # OK
@@ -313,25 +315,24 @@ function LinearGauge(selector, options = {}) {
     options.colors = options.colors || ['green', 'yellow', 'orange', 'red',];
     let W = canvas.width = canvas.clientWidth, H = canvas.height = canvas.clientHeight;
     let mx = 40, my = 40;  // FIXME
-    let xx = (W - 2 * mx), yx = (H - 2 * my) / options.max;
+    let xx = (W - 2 * mx), yx = (2 * my - H) / options.max;
 
     ctx.translate(mx, H - my);
-    ctx.scale(1, -1);
     ctx.font = style.font;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'right';
     ctx.lineWidth = 3;
     ctx.strokeStyle = ctx.fillStyle = window.getComputedStyle(canvas).color;
 
-    ctx.moveTo(0, 0); ctx.lineTo(W - 2 * mx, 0);
-    ctx.moveTo(0, H - 2 * my); ctx.lineTo(W - 2 * mx, H - 2 * my);
+    ctx.moveTo(0, 0); ctx.lineTo(xx, 0);
+    ctx.moveTo(0, options.max * yx); ctx.lineTo(xx, options.max * yx);
     ctx.stroke();
-    ctx.fillText(options.max, -3, H - 2 * my);
+    ctx.fillText(options.max, -3, options.max * yx);
     ctx.fillText('0', -3, 0);
 
     this.plot = (...data) => {
         if (data.length === 0) return;
-        ctx.clearRect(0, 0, W - 2 * mx, H - 2 * my);
+        ctx.clearRect(0, 0, xx, options.max * yx);
 
         let sum = data.reduce((a, v) => a + v, 0);
         let i = 0, y = 0, s = options.max * yx / sum;
