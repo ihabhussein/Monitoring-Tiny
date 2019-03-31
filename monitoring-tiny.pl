@@ -78,7 +78,7 @@ sub packages {
     if (-x '/usr/bin/apt-get') {  # Debian, Ubuntu
         return [
             map {[$_, '', '']}
-            `/usr/bin/apt list --upgradable | /usr/bin/grep -v Listing`
+            `/usr/bin/apt list --upgradable | /bin/grep -v Listing`
         ];
     };
 
