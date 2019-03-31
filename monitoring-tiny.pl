@@ -8,13 +8,12 @@ use IO::Socket;
 
 
 my $data_start = tell DATA;
-my $json = JSON->new;
 
 if (@ARGV == 1) {
     if ($ARGV[0] eq 'status') {
-        say $json->encode(&status);
+        say encode_json(&status);
     } elsif ($ARGV[0] eq 'packages') {
-        say $json->encode(&packages);
+        say encode_json(&packages);
     } else {
         &server($ARGV[1]);
     }
@@ -116,10 +115,10 @@ sub request {
             $res->{text} = <DATA>;
         } elsif ($req->{url} eq '/status') {
             $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = $json->encode(&status);
+            $res->{text} = encode_json(&status);
         } elsif ($req->{url} eq '/packages') {
             $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = $json->encode(&packages);
+            $res->{text} = encode_json(&packages);
         } else {
             $res->{status} = 404;                                    # Not Found
         }
