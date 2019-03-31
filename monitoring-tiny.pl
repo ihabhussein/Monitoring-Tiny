@@ -22,7 +22,7 @@ if (@ARGV == 1) {
 Usage:
     $0 status
     $0 packages
-    $0 address[:port]
+    $0 address:port
 EOT
 };
 
