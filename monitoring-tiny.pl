@@ -9,14 +9,22 @@ use IO::Socket;
 
 my $data_start = tell DATA;
 my $json = JSON->new;
-my ($addr, $port);
-if (@ARGV == 2) {
-    $addr = $ARGV[0];    $port = $ARGV[1];
-} elsif (@ARGV == 1) {
-    $addr = '127.0.0.1'; $port = $ARGV[0];
+
+if (@ARGV == 1) {
+    if ($ARGV[0] eq 'status') {
+        say $json->encode(&status);
+    } elsif ($ARGV[0] eq 'packages') {
+        say $json->encode(&packages);
+    } else {
+        &server($ARGV[1]);
+    }
 } else {
-    say $json->encode(&packages);
-    exit;
+    print <<EOT;
+Usage:
+    $0 status
+    $0 packages
+    $0 address[:port]
+EOT
 };
 
 
@@ -139,13 +147,17 @@ sub respond {
         length($req->{response}{text});
 }
 
-my $server = IO::Socket::INET->new(
-    Proto => 'tcp', LocalAddr => "$addr:$port", Listen => SOMAXCONN,
-) or die "Unable to create server socket: $!";
+sub server {
+    my ($addr) = @_;
+    my $server = IO::Socket::INET->new(
+        Proto => 'tcp', LocalAddr => "$addr", Listen => SOMAXCONN,
+    ) or die "Unable to create server socket: $!";
 
-for (; my $client = $server->accept; $client->close) {
-    respond(request($client));
-};
+    for (; my $client = $server->accept; $client->close) {
+        respond(request($client));
+    };
+}
+
 
 __DATA__
 <html lang="ar-EG">
