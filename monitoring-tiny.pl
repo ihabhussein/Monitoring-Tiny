@@ -15,12 +15,12 @@ if (@ARGV == 2) {
 } elsif (@ARGV == 1) {
     $addr = '127.0.0.1'; $port = $ARGV[0];
 } else {
-    say $json->encode(&monitor);
+    say $json->encode(&packages);
     exit;
 };
 
 
-sub monitor {
+sub status {
     my %cmds = (
         CPU => '/usr/sbin/iostat -dC',
         DSK => '/bin/df -m',
@@ -60,6 +60,31 @@ sub monitor {
     return \%data;
 };
 
+sub packages {
+    if (-x '/usr/sbin/pkg') {  # FreeBSD
+        return [
+            map {[$_, '', '']}
+            `/usr/sbin/pkg version -vRl '<'`
+        ];
+    };
+
+    if (-x '/usr/bin/apt-get') {  # Debian, Ubuntu
+        return [
+            map {[$_, '', '']}
+            `/usr/bin/apt list --upgradable | /usr/bin/grep -v Listing`
+        ];
+    };
+
+    if (-x '/usr/local/bin/brew') {  # macOS
+        return [
+            map {/(\S+)\s\(([^)]+)\)\s+<\s+(\S+)/; [$1, $2, $3]}
+            `/usr/local/bin/brew outdated -v`
+        ];
+    };
+
+    return [];  # Other...
+};
+
 sub request {
     my ($client) = @_;
     my $req = {client => $client};
@@ -74,18 +99,19 @@ sub request {
         $req->{version} = $3;
     };
 
-    my $res = {headers => {}, text => ''};
+    my $res = {status => 200, headers => {}, text => ''};
     if ($req->{method} eq 'GET') {
         if ($req->{url} eq '/') {
             local $/;
-            $res->{status} = 200;                                           # OK
             $res->{headers}{'Content-type'} = 'text/html';
             seek DATA, $data_start, 0;
             $res->{text} = <DATA>;
         } elsif ($req->{url} eq '/status') {
-            $res->{status} = 200;                                           # OK
             $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = $json->encode(&monitor);
+            $res->{text} = $json->encode(&status);
+        } elsif ($req->{url} eq '/packages') {
+            $res->{headers}{'Content-type'} = 'application/json';
+            $res->{text} = $json->encode(&packages);
         } else {
             $res->{status} = 404;                                    # Not Found
         }
