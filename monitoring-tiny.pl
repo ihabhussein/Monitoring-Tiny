@@ -15,18 +15,6 @@ my %ops = (
     packages    => \&packages,
 );
 
-if (@ARGV == 1) {
-    if (defined $ops{$ARGV[0]}) {
-        say encode_json($ops{$ARGV[0]}());
-    } else {
-        &server($ARGV[0]);
-    }
-} else {
-    print "Usage:\n\t$0 address:port\n";
-    print "\t$0 $_\n" for keys %ops;
-};
-
-
 sub status {
     my %data = (timestamp => time);
 
@@ -167,17 +155,23 @@ sub respond {
     ;
 }
 
-sub server {
-    my ($addr) = @_;
-    my $server = IO::Socket::INET->new(
-        Proto => 'tcp', LocalAddr => "$addr", Listen => SOMAXCONN,
-    ) or die "Unable to create server socket: $!";
 
-    for (; my $client = $server->accept; $client->close) {
-        respond($client);
+if (@ARGV == 1) {
+    if (defined $ops{$ARGV[0]}) {
+        say encode_json($ops{$ARGV[0]}());
+    } else {
+        my $server = IO::Socket::INET->new(
+            Proto => 'tcp', LocalAddr => $ARGV[0], Listen => SOMAXCONN,
+        ) or die "Unable to create server socket: $!";
+
+        while (my $client = $server->accept) {
+            respond($client); $client->close;
+        };
     };
-}
-
+} else {
+    print "Usage:\n\t$0 address:port\n";
+    print "\t$0 $_\n" for keys %ops;
+};
 
 __DATA__
 <html lang="ar-EG">
