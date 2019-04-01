@@ -25,16 +25,16 @@ sub status {
 
     for (@D) {
         $data{IO}{$_} = {
-            kpt => $F[$i++],
-            tps => $F[$i++],
-            mps => $F[$i++],
+            kpt => 0+$F[$i++],
+            tps => 0+$F[$i++],
+            mps => 0+$F[$i++],
         };
     };
 
     $data{CPU} = {
-        user    => $F[-3],
-        system  => $F[-2],
-        idle    => $F[-1],
+        user    => 0+$F[-3],
+        system  => 0+$F[-2],
+        idle    => 0+$F[-1],
     };
 
     return \%data;
@@ -47,9 +47,9 @@ sub df {
         my @F = split /\s+/;
         push @{$data{DISK}}, {
             filesystem => $F[0],
-            size       => $F[1],
-            used       => $F[2],
-            available  => $F[3],
+            size       => 0+$F[1],
+            used       => 0+$F[2],
+            available  => 0+$F[3],
             mount      => $F[-1],
         } if $F[-1] =~ m(^/) && $F[1] =~ /\d+/ && $F[1] > 0;
     };
