@@ -196,7 +196,8 @@ __DATA__
 </style>
 </head>
 <body>
-<div id="df">
+<h1></h1>
+<div>
     <figure>
         <figcaption>CPU%</figcaption>
         <canvas id="cpu"></canvas>
@@ -206,29 +207,14 @@ __DATA__
         <canvas id="io"></canvas>
     </figure>
 </div>
+<div id="df"></div>
 
 <script>
 function Chart(selector, options) {
-    let isObject = x => x && typeof x === 'object' && !Array.isArray(x);
-
-    let assign2 = (target, ...sources) => {
-        sources.forEach(s => {
-            for (let k in s) {
-                if (isObject(s[k])) {
-                    if (!isObject(target[k])) target[k] = {};
-                    assign2(target[k], s[k]);
-                } else {
-                    target[k] = s[k];
-                };
-            };
-        });
-        return target;
-    };
-
-    let limits = (series, min, max, cb) => {
+    let limits = (series, cb) => {
         series.forEach(d => {
-            min = Math.min(...d.map(cb), min);
-            max = Math.max(...d.map(cb), max);
+            min = Math.min(...d.map(cb), Infinity);
+            max = Math.max(...d.map(cb), -Infinity);
         });
         return [min, max];
     };
@@ -243,8 +229,8 @@ function Chart(selector, options) {
     let xx = 0, yx = 0;
 
     let setup = (series) => {
-        [options.xAxis.min, options.xAxis.max] = limits(series, options.xAxis.min, options.xAxis.max, el => el[0]);
-        [options.yAxis.min, options.yAxis.max] = limits(series, options.yAxis.min, options.yAxis.max, el => el[1]);
+        [options.xAxis.min, options.xAxis.max] = limits(series, el => el[0]);
+        [options.yAxis.min, options.yAxis.max] = [0, limits(series, el => el[1])[1]];
 
         xx = (W - 2 * mx) / (options.xAxis.max - options.xAxis.min);
         yx = (H - 2 * my) / (options.yAxis.max - options.yAxis.min);
@@ -285,45 +271,26 @@ function Chart(selector, options) {
 
     let moveTo = (x, y) => ctx.moveTo((x - options.xAxis.min) * xx, (y - options.yAxis.min) * yx);
     let lineTo = (x, y) => ctx.lineTo((x - options.xAxis.min) * xx, (y - options.yAxis.min) * yx);
-    let drawRect = (x, y, w, h) => {
-        ctx.strokeRect((x - options.xAxis.min) * xx, (y - options.yAxis.min) * yx, w * xx, h * yx);
-        ctx.fillRect((x - options.xAxis.min) * xx, (y - options.yAxis.min) * yx, w * xx, h * yx);
-    };
     let fillText = (s, x, y) => ctx.fillText(s, (x - options.xAxis.min) * xx, (y - options.yAxis.min) * yx);
 
     let ticks = () => {
         ctx.save();
         ctx.setLineDash([3, 3]);
+        options.yAxis.ticks = Math.round(options.yAxis.max * 10) /100;
 
         ctx.beginPath();
-        if (options.xAxis.ticks > 0) {
-            for (let x = options.xAxis.min + options.xAxis.ticks; x <= options.xAxis.max; x += options.xAxis.ticks) {
-                moveTo(x, options.yAxis.min);
-                lineTo(x, options.yAxis.max);
-            }
-        }
-        if (options.yAxis.ticks > 0) {
-            for (let y = options.yAxis.min + options.yAxis.ticks; y <= options.yAxis.max; y += options.yAxis.ticks) {
-                moveTo(options.xAxis.min, y);
-                lineTo(options.xAxis.max, y);
-            }
-        }
+        for (let y = options.yAxis.min + options.yAxis.ticks; y <= options.yAxis.max; y += options.yAxis.ticks) {
+            moveTo(options.xAxis.min, y);
+            lineTo(options.xAxis.max, y);
+        };
         ctx.stroke();
 
         ctx.scale(1, -1);
-        if (options.xAxis.ticks > 0) {
-            ctx.textBaseline = 'top';
-            for (let x = options.xAxis.min; x <= options.xAxis.max; x += options.xAxis.ticks) {
-                fillText(x, x, options.yAxis.min);
-            }
-        }
-        if (options.yAxis.ticks > 0) {
-            ctx.textBaseline = 'middle';
-            ctx.textAlign = 'right';
-            for (let y = options.yAxis.min; y <= options.yAxis.max; y += options.yAxis.ticks) {
-                fillText(y, options.xAxis.min - 2, -y);
-            };
-        }
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'right';
+        for (let y = options.yAxis.min; y <= options.yAxis.max; y += options.yAxis.ticks) {
+            fillText(y, options.xAxis.min, -y);
+        };
 
         ctx.restore();
     };
@@ -355,44 +322,13 @@ function Chart(selector, options) {
         ctx.restore();
     };
 
-    let plotBar = (data, color, fill, n, idx) => {
-        if (data.length === 0) return;
-        if (!n || idx >= n) return;
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1;
-
-        let grd = ctx.createLinearGradient(0, H, 0, -H);
-        grd.addColorStop(0.0, color);
-        grd.addColorStop(1.0, style.backgroundColor);
-        ctx.fillStyle = grd;
-        ctx.globalCompositeOperation = 'destination-over';
-
-        let i = 0,
-            w = options.xAxis.ticks / (n + 1),
-            x = w * (idx - n / 2);
-        data.forEach(el => {
-            x += options.xAxis.ticks;
-            drawRect(x, 0, w, el[1]);
-        });
-
-        ctx.restore();
-    };
-
     this.plot = options => {
-        options = assign2({
-            lines: [], bars: [],
-            xAxis: {title: '', min: Infinity, max: -Infinity, ticks: undefined},
-            yAxis: {title: '', min: Infinity, max: -Infinity, ticks: undefined},
-        }, options);
-
         ctx.clearRect(0, 0, W, H);
-        setup([...options.lines.map(d => d.data), ...options.bars.map(d => d.data)]);
+        setup(options.lines.map(d => d.data));
         axes();
         ticks();
 
         let i = 0;
-        options.bars.forEach((d, idx) => plotBar(d.data, d.color || colors[i++ % colors.length], d.fill, options.bars.length, idx));
         options.lines.forEach(d => plotLine(d.data, d.color || colors[i++ % colors.length], d.fill));
     };
 
@@ -478,6 +414,7 @@ let cpu = new LinearGauge('#cpu', {colors: ['green', 'red', '#353535']});
 let df = {}, diskio = {};
 
 fetch('/df').then(r => r.json()).then(data => {
+    document.querySelector('h1').innerText = data.host;
     let div = document.querySelector('#df');
     data.DISK.forEach(x => {
         let id = getId(x.mount);
@@ -490,14 +427,14 @@ fetch('/df').then(r => r.json()).then(data => {
 
 setInterval(() => {
     fetch('/status').then(r => r.json()).then(data => {
-        console.log(data);
         let lines = [];
         for (let x in data.IO) {
             if (!(x in diskio)) diskio[x] = [];
             diskio[x].push([data.timestamp, data.IO[x].mps]);
-            lines.push(diskio[x]);
+            while (diskio[x].length > 20) diskio[x].shift();
+            lines.push({data: diskio[x]});
         };
-        new Chart('#io', {lines: lines, xAxis: {}, yAxis:{}});
+        new Chart('#io', {lines: lines, xAxis: {title: 'Time'}, yAxis:{title: 'MB/s'}});
         cpu.plot(Number(data.CPU.user), Number(data.CPU.system), Number(data.CPU.idle));
     })
 }, 5000);
