@@ -174,36 +174,36 @@ if (@ARGV == 1) {
 };
 
 __DATA__
-<html lang="ar-EG">
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <style>
     body {
+        font-family: system-ui,-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto";
         background-color: #353535;
         color: #dddddd;
-        font: bold 10pt sans-serif;
     }
     figure {
         display: inline-block; border: 1px solid lightgray;
         width: fit-content; padding: 0.25rem;
     }
-    figcaption {text-align: center; font-size: 1.5rem;}
-    #canvas1 {width: 480px; height: 320px;}
-    #canvas2 {width: 160px; height: 320px;}
-    #canvas3 {width: 160px; height: 160px; font-size: 2rem;}
+    figcaption {text-align: center;}
+    #io {width: 480px; height: 320px;}
+    #cpu {width: 160px; height: 320px;}
+    canvas.df {width: 160px; height: 160px; font-size: 2rem;}
 </style>
-
-<figure>
-    <figcaption>Chart</figcaption>
-    <canvas id="canvas1"></canvas>
-</figure>
-<figure>
-    <figcaption>CPU%</figcaption>
-    <canvas id="canvas2"></canvas>
-</figure>
-<figure>
-    <figcaption>Hard Disk</figcaption>
-    <canvas id="canvas3"></canvas>
-</figure>
+</head>
+<body>
+<div id="df">
+    <figure>
+        <figcaption>CPU%</figcaption>
+        <canvas id="cpu"></canvas>
+    </figure>
+    <figure>
+        <figcaption>I/O</figcaption>
+        <canvas id="io"></canvas>
+    </figure>
+</div>
 
 <script>
 function Chart(selector, options) {
@@ -462,6 +462,7 @@ function DialGauge(selector, options = {}) {
         ctx.clearRect(-W / 2, -H / 2, W / 2, H / 2);
 
         value /= (options.max || 100);
+        ctx.beginPath();
         ctx.arc(0, 0, R, angle(0), angle(value));
         ctx.stroke();
         ctx.fillText(value.toLocaleString('en', {style: 'percent'}), 0, 0);
@@ -470,31 +471,40 @@ function DialGauge(selector, options = {}) {
     this.plot(options.value);
 };
 
-new Chart('#canvas1', {
-    lines: [
-        {
-            data: [[40, 200], [80, 120], [120, 160], [160, 100], [200, 110], [240, 90]],
-        },
-    ],
-    bars: [
-        {
-            data: [[40, 210], [80, 100], [120, 200], [160, 80], [200, 100], [240, 90]],
-        },
-        {
-            data: [[40, 230], [80, 40], [120, 240], [160, 80], [200, 30], [240, 40]],
-        },
-    ],
-    xAxis: {
-        title: 'الشهور', min: 0, max: 280, ticks: 40,
-    },
-    yAxis: {
-        title: 'المبيعات', min: 0, max: 250, ticks: 50,
-    },
+let getId = s => `df_${s.replace(/\//g, '_')}`;
+let cpu = new LinearGauge('#cpu', {colors: ['green', 'red', '#353535']});
+let df = {}, diskio = {};
+
+fetch('/df').then(r => r.json()).then(data => {
+    let div = document.querySelector('#df');
+    data.DISK.forEach(x => {
+        let id = getId(x.mount);
+        let fig = document.createElement('figure');
+        fig.innerHTML = `<figcaption>${x.mount}</figcaption><canvas id="${id}" class="df"></canvas>`;
+        div.appendChild(fig);
+        df[id] = new DialGauge(`#${id}`);
+    });
 });
 
-new LinearGauge('#canvas2', {
-    colors: ['green', 'red', '#353535',],
-}).plot(30, 10, 60);
+setInterval(() => {
+    fetch('/status').then(r => r.json()).then(data => {
+        console.log(data);
+        let lines = [];
+        for (let x in data.IO) {
+            if (!(x in diskio)) diskio[x] = [];
+            diskio[x].push([data.timestamp, data.IO[x].mps]);
+            lines.push(diskio[x]);
+        };
+        new Chart('#io', {lines: lines, xAxis: {}, yAxis:{}});
+        cpu.plot(Number(data.CPU.user), Number(data.CPU.system), Number(data.CPU.idle));
+    })
+}, 5000);
 
-new DialGauge('#canvas3').plot(62);
+setInterval(() => {
+    fetch('/df').then(r => r.json()).then(data =>
+        data.DISK.forEach(x => df[getId(x.mount)].plot(x.used * 100 / x.size))
+    )
+}, 13000);
 </script>
+</body>
+</html>
