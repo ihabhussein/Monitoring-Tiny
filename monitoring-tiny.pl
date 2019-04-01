@@ -12,6 +12,8 @@ my $data_start = tell DATA;
 if (@ARGV == 1) {
     if ($ARGV[0] eq 'status') {
         say encode_json(&status);
+    } elsif ($ARGV[0] eq 'zfs') {
+        say encode_json(&zfs);
     } elsif ($ARGV[0] eq 'packages') {
         say encode_json(&packages);
     } else {
@@ -67,6 +69,22 @@ sub status {
     return \%data;
 };
 
+sub zfs {
+    my ($cur, $header, %data) = ({}, '');
+
+    for (`/sbin/zpool status`) {
+        if (/^ *pool: *(.+)/) {
+            $cur = $data{$1} = {};
+        } elsif (/^ *([^:]+):\s*(.*)/) {
+            $cur->{$header = $1} = $2;
+        } else {
+            $cur->{$header} .= $_;
+        };
+    };
+
+    return \%data;
+}
+
 sub packages {
     if (-x '/usr/sbin/pkg') {  # FreeBSD
         return [
@@ -116,6 +134,9 @@ sub request {
         } elsif ($req->{url} eq '/status') {
             $res->{headers}{'Content-type'} = 'application/json';
             $res->{text} = encode_json(&status);
+        } elsif ($req->{url} eq '/zfs') {
+            $res->{headers}{'Content-type'} = 'application/json';
+            $res->{text} = encode_json(&zfs);
         } elsif ($req->{url} eq '/packages') {
             $res->{headers}{'Content-type'} = 'application/json';
             $res->{text} = encode_json(&packages);
