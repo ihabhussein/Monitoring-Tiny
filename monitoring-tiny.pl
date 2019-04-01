@@ -16,7 +16,7 @@ my %ops = (
 );
 
 sub status {
-    my %data = (timestamp => time);
+    my %data = (timestamp => time, host => `hostname`);
 
     my @lines = map {s/\s+//; $_} `/usr/sbin/iostat -dC -c2`;
     my @D = split /\s+/, $lines[0]; pop @D;
@@ -41,7 +41,7 @@ sub status {
 };
 
 sub df {
-    my %data = (timestamp => time);
+    my %data = (timestamp => time, host => `hostname`);
 
     for (`/bin/df -m`) {
         my @F = split /\s+/;
@@ -58,11 +58,11 @@ sub df {
 }
 
 sub zfs {
-    my ($cur, $header, %data) = ({}, '');
+    my ($cur, $header, %data) = ({}, '', timestamp => time, host => `hostname`);
 
     for (`/sbin/zpool status`) {
         if (/^ *pool: *(.+)/) {
-            $cur = $data{$1} = {};
+            $cur = $data{pools}{$1} = {};
         } elsif (/^ *([^:]+):\s*(.*)/) {
             $cur->{$header = $1} = $2;
         } else {
@@ -74,28 +74,30 @@ sub zfs {
 }
 
 sub packages {
+    my %data = (timestamp => time, host => `hostname`);
+
     if (-x '/usr/sbin/pkg') {  # FreeBSD
-        return [
+        $data{packages} = [
             map {[$_, '', '']}
             `/usr/sbin/pkg version -vRl '<'`
         ];
     };
 
     if (-x '/usr/bin/apt-get') {  # Debian, Ubuntu
-        return [
+        $data{packages} = [
             map {[$_, '', '']}
             `/usr/bin/apt list --upgradable | /bin/grep -v Listing`
         ];
     };
 
     if (-x '/usr/local/bin/brew') {  # macOS
-        return [
+        $data{packages} = [
             map {/(\S+)\s\(([^)]+)\)\s+<\s+(\S+)/; [$1, $2, $3]}
             `/usr/local/bin/brew outdated -v`
         ];
     };
 
-    return [];  # Other...
+    return \%data;
 };
 
 sub respond {
