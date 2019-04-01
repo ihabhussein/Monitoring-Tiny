@@ -18,7 +18,7 @@ if (@ARGV == 1) {
     if (defined $ops{$ARGV[0]}) {
         say encode_json($ops{$ARGV[0]}());
     } else {
-        &server($ARGV[1]);
+        &server($ARGV[0]);
     }
 } else {
     print "Usage:\n\t$0 address:port\n";
@@ -107,12 +107,13 @@ sub packages {
     return [];  # Other...
 };
 
-sub request {
+sub respond {
     my ($client) = @_;
-    my $req = {client => $client};
+    my $req = {};
 
+    # Read request line
     local $/ = "\r\n";
-    local $_ = <$client>;                                         # Request Line
+    local $_ = <$client>;
     if (/(\w+)\s*(.+?)\s*HTTP\/(\d.\d)/) {
         chomp;
         $req->{request} = $_;
@@ -121,6 +122,8 @@ sub request {
         $req->{version} = $3;
     };
 
+    # Generate response
+    my $s = substr $req->{url}, 1;
     my $res = {
         status => 200,
         headers => {'Content-type' => 'application/json'},
@@ -133,33 +136,30 @@ sub request {
             $res->{headers}{'Content-type'} = 'text/html';
             seek DATA, $data_start, 0;
             $res->{text} = <DATA>;
-        } elsif (defined $ops{substr $req->{url}, 1}) {
-            $res->{text} = encode_json($ops{$req->{url}}());
+        } elsif (defined $ops{$s}) {
+            $res->{text} = encode_json($ops{$s}());
         } else {
             $res->{status} = 404;                                    # Not Found
         }
     } else {
         $res->{status} = 405;                               # Method Not Allowed
-    }
-
+    };
     $res->{headers}{'Content-length'} = length($res->{text});
-    $req->{response} = $res;
-    return $req;
-};
 
-sub respond {
-    my ($req) = @_;
-    my $fh = $req->{client};
-    $fh->printf("HTTP/%s %d  \r\n", $req->{version}, $req->{response}{status});
-    $fh->printf("%s: %s\r\n", $_, $req->{response}{headers}{$_})
-        for keys %{$req->{response}{headers}};
-    $fh->printf("\r\n%s", $req->{response}{text});
+    # Send the response
+    $client->printf("HTTP/%s %d  \r\n", $req->{version}, $res->{status});
+    $client->printf("%s: %s\r\n", $_, $res->{headers}{$_})
+        for keys %{$res->{headers}};
+    $client->printf("\r\n%s", $res->{text});
 
-    my $timestamp = strftime('%d/%b/%Y:%H:%M:%S %z', localtime);
+    # Log the request
     printf "%s - - [%s] \"%s\" %d %d\n",
-        $req->{client}->sockhost(), $timestamp,
-        $req->{request}, $req->{response}{status},
-        length($req->{response}{text});
+        $client->sockhost(),
+        strftime('%d/%b/%Y:%H:%M:%S %z', localtime),
+        $req->{request},
+        $res->{status},
+        $res->{headers}{'Content-length'}
+    ;
 }
 
 sub server {
@@ -169,7 +169,7 @@ sub server {
     ) or die "Unable to create server socket: $!";
 
     for (; my $client = $server->accept; $client->close) {
-        respond(request($client));
+        respond($client);
     };
 }
 
