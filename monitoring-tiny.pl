@@ -10,6 +10,7 @@ use IO::Socket;
 my $data_start = tell DATA;
 my %ops = (
     status      => \&status,
+    df          => \&df,
     zfs         => \&zfs,
     packages    => \&packages,
 );
@@ -27,15 +28,11 @@ if (@ARGV == 1) {
 
 
 sub status {
-    my %cmds = (
-        CPU => '/usr/sbin/iostat -dC',
-        DSK => '/bin/df -m',
-    );
-    my %data = (timestamp => $^T);
+    my %data = (timestamp => time);
 
-    my @lines = map {s/\s+//; $_} `$cmds{CPU}`;
+    my @lines = map {s/\s+//; $_} `/usr/sbin/iostat -dC -c2`;
     my @D = split /\s+/, $lines[0]; pop @D;
-    my @F = split /\s+/, $lines[2];
+    my @F = split /\s+/, $lines[-1];
     my $i = 0;
 
     for (@D) {
@@ -52,7 +49,13 @@ sub status {
         idle    => $F[-1],
     };
 
-    for (`$cmds{DSK}`) {
+    return \%data;
+};
+
+sub df {
+    my %data = (timestamp => time);
+
+    for (`/bin/df -m`) {
         my @F = split /\s+/;
         push @{$data{DISK}}, {
             filesystem => $F[0],
@@ -64,7 +67,7 @@ sub status {
     };
 
     return \%data;
-};
+}
 
 sub zfs {
     my ($cur, $header, %data) = ({}, '');
