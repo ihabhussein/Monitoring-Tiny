@@ -112,15 +112,17 @@ sub respond {
     my $req = {};
 
     # Read request line
-    local $/ = "\r\n";
-    local $_ = <$client>;
-    if (/(\w+)\s*(.+?)\s*HTTP\/(\d.\d)/) {
-        chomp;
-        $req->{request} = $_;
-        $req->{method} = uc($1);
-        $req->{url} = $2;
-        $req->{version} = $3;
-    };
+    {
+        local $/ = "\r\n";
+        local $_ = <$client>;
+        if (/(\w+)\s*(.+?)\s*HTTP\/(\d.\d)/) {
+            chomp;
+            $req->{request} = $_;
+            $req->{method} = uc($1);
+            $req->{url} = $2;
+            $req->{version} = $3;
+        };
+    }
 
     # Generate response
     my $s = substr $req->{url}, 1;
