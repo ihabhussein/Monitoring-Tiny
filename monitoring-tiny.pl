@@ -8,24 +8,21 @@ use IO::Socket;
 
 
 my $data_start = tell DATA;
+my %ops = (
+    status      => \&status,
+    zfs         => \&zfs,
+    packages    => \&packages,
+);
 
 if (@ARGV == 1) {
-    if ($ARGV[0] eq 'status') {
-        say encode_json(&status);
-    } elsif ($ARGV[0] eq 'zfs') {
-        say encode_json(&zfs);
-    } elsif ($ARGV[0] eq 'packages') {
-        say encode_json(&packages);
+    if (defined $ops{$ARGV[0]}) {
+        say encode_json($ops{$ARGV[0]}());
     } else {
         &server($ARGV[1]);
     }
 } else {
-    print <<EOT;
-Usage:
-    $0 status
-    $0 packages
-    $0 address:port
-EOT
+    print "Usage:\n\t$0 address:port\n";
+    print "\t$0 $_\n" for keys %ops;
 };
 
 
@@ -124,22 +121,20 @@ sub request {
         $req->{version} = $3;
     };
 
-    my $res = {status => 200, headers => {}, text => ''};
+    my $res = {
+        status => 200,
+        headers => {'Content-type' => 'application/json'},
+        text => '{}',
+    };
+
     if ($req->{method} eq 'GET') {
         if ($req->{url} eq '/') {
             local $/;
             $res->{headers}{'Content-type'} = 'text/html';
             seek DATA, $data_start, 0;
             $res->{text} = <DATA>;
-        } elsif ($req->{url} eq '/status') {
-            $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = encode_json(&status);
-        } elsif ($req->{url} eq '/zfs') {
-            $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = encode_json(&zfs);
-        } elsif ($req->{url} eq '/packages') {
-            $res->{headers}{'Content-type'} = 'application/json';
-            $res->{text} = encode_json(&packages);
+        } elsif (defined $ops{substr $req->{url}, 1}) {
+            $res->{text} = encode_json($ops{$req->{url}}());
         } else {
             $res->{status} = 404;                                    # Not Found
         }
