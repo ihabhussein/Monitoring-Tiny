@@ -7,37 +7,38 @@ use POSIX qw(strftime);
 use IO::Socket;
 
 my $data_start = tell DATA;
+
+sub base_data {
+    my $hostname = `hostname`;
+    chomp $hostname;
+    return (timestamp => time, host => $hostname);
+};
+
 my %ops = (
     status => sub {
-        my %data = (timestamp => time, host => `hostname`);
-
         my @lines = map {s/\s+//; $_} `/usr/sbin/iostat -dC -c2`;
         my @D = split /\s+/, $lines[0]; pop @D;
         my @F = split /\s+/, $lines[-1];
-        my $i = 0;
 
+        my ($i, $data) = (0, {});
         for (@D) {
-            $data{IO}{$_} = {
+            $data->{$_} = {
                 kpt => 0+$F[$i++],
                 tps => 0+$F[$i++],
                 mps => 0+$F[$i++],
             };
         };
-
-        $data{CPU} = {
-            user    => 0+$F[-3],
-            system  => 0+$F[-2],
-            idle    => 0+$F[-1],
+        return {
+            &base_data,
+            IO => $data,
+            CPU => {user => 0+$F[-3], system => 0+$F[-2], idle => 0+$F[-1]},
         };
-
-        return \%data;
     },
     df => sub {
-        my %data = (timestamp => time, host => `hostname`);
-
+        my $data;
         for (`/bin/df -m`) {
             my @F = split /\s+/;
-            push @{$data{DISK}}, {
+            push @$data, {
                 filesystem => $F[0],
                 size       => 0+$F[1],
                 used       => 0+$F[2],
@@ -45,49 +46,26 @@ my %ops = (
                 mount      => $F[-1],
             } if $F[-1] =~ m(^/) && $F[1] =~ /\d+/ && $F[1] > 0;
         };
-
-        return \%data;
+        return {&base_data, disks => $data};
     },
     zfs => sub {
-        my ($cur, $header, %data) = ({}, '', timestamp => time, host => `hostname`);
-
+        my ($cur, $header, $data);
         for (`/sbin/zpool status`) {
             if (/^ *pool: *(.+)/) {
-                $cur = $data{pools}{$1} = {};
+                $cur = $data->{$1} = {};
             } elsif (/^ *([^:]+):\s*(.*)/) {
                 $cur->{$header = $1} = $2;
             } else {
                 $cur->{$header} .= $_;
             };
         };
-
-        return \%data;
+        return {&base_data, pools => $data};
     },
     packages => sub {
-        my %data = (timestamp => time, host => `hostname`);
-
-        if (-x '/usr/sbin/pkg') {  # FreeBSD
-            $data{packages} = [
-                map {[$_, '', '']}
-                `/usr/sbin/pkg version -vRl '<'`
-            ];
-        };
-
-        if (-x '/usr/bin/apt-get') {  # Debian, Ubuntu
-            $data{packages} = [
-                map {[$_, '', '']}
-                `/usr/bin/apt list --upgradable | /bin/grep -v Listing`
-            ];
-        };
-
-        if (-x '/usr/local/bin/brew') {  # macOS
-            $data{packages} = [
-                map {/(\S+)\s\(([^)]+)\)\s+<\s+(\S+)/; [$1, $2, $3]}
-                `/usr/local/bin/brew outdated -v`
-            ];
-        };
-
-        return \%data;
+        my $data = [
+            map {chomp; [split /\s+/, $_, 3]} `/usr/sbin/pkg version -vRl'<'`
+        ];
+        return {&base_data, packages => $data};
     },
 );
 
